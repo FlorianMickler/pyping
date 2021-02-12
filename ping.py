@@ -37,32 +37,68 @@ s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL,1)
 SO_TIMESTAMPNS = 35
 s.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMPNS, 1)
 
+def revByte(i):
+    r = int.from_bytes(i.to_bytes(4,byteorder='big'), byteorder='little')
+    ret = (r,i)
+    if (r > i):
+        ret = (i,r)
+    return ret
+
+
+ms_day=86400*1000
+ms_qday = ms_day / 4
+def compensateRollOver(ts, comp_ts):
+    if ts < ms_qday and comp_ts > ms_day - ms_qday:
+        ts = ts + ms_day
+    return ts
+
+# call with remote timestamp ts (unknown byte order) and the local ts with which we want
+# to compare offset-wise (inspired by wireshark paket-icmp)
+def getTS(ts, comp_ts):
+    (ts1, ts2) = revByte(ts) #returns both byteorders sorted ascending
+    if ts1 < ms_day and ts2 > ms_day:
+        return ts1
+
+    if ts2 < ms_day: #both might be valid
+        nts1 = compensateRollOver(ts1, comp_ts)
+        nts2 = compensateRollOver(ts2, comp_ts)
+    else: # both are too big
+        nts1 = ts1
+        nts2 = ts2
+
+    #return nearest to comp_ts
+    if abs(nts1 - comp_ts) < abs(nts2 - comp_ts):
+        return ts1
+    return ts2
+
 def getCurrentTimeMS():
     now = datetime.datetime.utcnow()
     return (now.hour*3600+now.minute*60+now.second)*1000+now.microsecond // 1000
 
 def show_reply(ricmp, receive_time):
+    rtime = getTS(ricmp.get_icmp_rtime(), receive_time)
+    ttime = getTS(ricmp.get_icmp_ttime(), receive_time)
+
     print("Ping reply id #%d" % ricmp.get_icmp_id())
     print("seqence:  %s" % (ricmp.get_icmp_seq()))
     print("lifetime: %d" % ricmp.get_icmp_lifetime())
     print("otime:    %d" % ricmp.get_icmp_otime())
-    print("rtime:    %d" % ricmp.get_icmp_rtime())
-    print("ttime:    %d" % ricmp.get_icmp_ttime())
+    print("rtime:    %d" % rtime)
+    print("ttime:    %d" % ttime)
     print("received  %d" % receive_time)
     print("---------------")
-    way2 = receive_time - ricmp.get_icmp_ttime()
-    way1 = ricmp.get_icmp_rtime() - ricmp.get_icmp_otime()
+    way2 = receive_time - ttime
+    way1 = rtime - ricmp.get_icmp_otime()
     trueWay = (way1+way2)/2 # if the runtime is symmetric
     offset = way2 - trueWay #offset of the remote machine
     overall = receive_time - ricmp.get_icmp_otime() #overall time
-    remoteTime = ricmp.get_icmp_ttime() - ricmp.get_icmp_rtime() #time on remote machine
+    remoteTime = ttime - rtime #time on remote machine
     print("way1      %d" % way1)
     print("way2      %d" % way2)
     print("offset:   %d" % offset)
     print("onRemote: %d" % remoteTime)
     print("overallT: %d" % overall)
     print("")
-
 
 seq_id = 0
 
