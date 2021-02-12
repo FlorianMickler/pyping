@@ -34,6 +34,8 @@ ip.contains(icmp)
 # Open a raw socket. Special permissions are usually required.
 s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
 s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL,1)
+SO_TIMESTAMPNS = 35
+s.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMPNS, 1)
 
 def getCurrentTimeMS():
     now = datetime.datetime.utcnow()
