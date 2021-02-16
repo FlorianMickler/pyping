@@ -119,13 +119,16 @@ while 1:
     # Wait for incoming replies.
     start_time = getCurrentTimeMS()
     delta_t = 0
+    received_reply = False
     while delta_t < timeout_ms:
         timeout_left = (timeout_ms - delta_t) / 1000
         #print("timeout_left %f" % timeout_left)
-        if s in select.select([s],[],[], timeout_left)[0]:
-            reply_receive = getCurrentTimeMS()
-            delta_t = start_time - reply_receive
 
+        objs = select.select([s],[],[], timeout_left)[0]
+        reply_receive = getCurrentTimeMS()
+        delta_t = start_time - reply_receive
+
+        if s in objs:
             reply = s.recvfrom(2000)[0]
             # Use ImpactDecoder to reconstruct the packet hierarchy.
             rip = ImpactDecoder.IPDecoder().decode(reply)
@@ -140,4 +143,7 @@ while 1:
                 else:
                     show_reply(ricmp, reply_receive)
                     delta_t = timeout_ms
+                    received_reply = True
+        if not received_reply:
+            print("no reply received")
     time.sleep(1) #wait 1 sec between timestamp requests
